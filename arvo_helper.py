@@ -157,8 +157,8 @@ def barns_to_html(barns):
 
 
 def get_arvo_html():
-    username = "ben.gleeson"
-    password = "ben8295"
+    username = os.environ["PRISM_USER"]
+    password = os.environ["PRISM_PASS"]
 
     session = prism_login(username, password)
     today = datetime.now().date()
@@ -166,3 +166,4 @@ def get_arvo_html():
     data = fetch_trackwork(session, today)
     barns = group_by_barn(data)
     return barns_to_html(barns)
+
