@@ -1,7 +1,8 @@
-import hashlib
 import os
+import hashlib
 import requests
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo
 from collections import defaultdict
 
 # ---------------------------
@@ -44,9 +45,11 @@ def prism_login(username, password):
     return session
 
 
-def date_to_epoch_ms(dt: date):
-    dt_midnight = datetime(dt.year, dt.month, dt.day)
-    return int(dt_midnight.timestamp() * 1000)
+def date_to_epoch_ms(d: date) -> int:
+    """Return epoch ms for midnight in Australia/Melbourne on date d."""
+    local_midnight = datetime(d.year, d.month, d.day, tzinfo=ZoneInfo("Australia/Melbourne"))
+    utc_time = local_midnight.astimezone(timezone.utc)
+    return int(utc_time.timestamp() * 1000)
 
 
 def fetch_trackwork(session, dt: date):
@@ -162,7 +165,9 @@ def get_arvo_html():
     password = os.environ["PRISM_PASS"]
 
     session = prism_login(username, password)
-    today = datetime.now().date()
+
+    # Use Melbourne date, not server-UTC date
+    today = datetime.now(ZoneInfo("Australia/Melbourne")).date()
 
     data = fetch_trackwork(session, today)
     barns = group_by_barn(data)
