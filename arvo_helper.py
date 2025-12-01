@@ -252,13 +252,15 @@ def box_order_to_html(data):
 
     for task in tasks:
         barn_name = task.get("barnName") or (task.get("barn") or {}).get("name")
-        group_name = (task.get("groupName") or "").strip()
-        if not group_name:
-            # if there's truly no group, skip for box order
-            continue
 
-        # We treat groupName as the "lot" label/key
-        lot_key = group_name
+        group_name = (task.get("groupName") or "").strip()
+        # We only care about real Lots (e.g. 'Lot 1 4:45')
+        lot_num = _parse_lot_number(group_name)
+        if lot_num is None:
+            continue  # skip numeric IDs, 'Walking', 'Swimming', etc.
+
+        # Use 'Lot 1', 'Lot 2', ... as the display label
+        lot_key = f"Lot {lot_num}"
         stats["with_lot"] += 1
 
         box_name = task.get("boxName") or (task.get("boxInfo") or {}).get("name")
@@ -293,7 +295,19 @@ def box_order_to_html(data):
         all_lots.add(lot_key)
 
 
-    all_lots = sorted(all_lots)
+
+    # Extract lot numbers from labels like 'Lot 1'
+    def lot_sort_value(label: str) -> int:
+        parts = label.split()
+        if len(parts) >= 2:
+            try:
+                return int(parts[1])
+            except ValueError:
+                pass
+        return 9999  # fallback, should not really happen for valid lots
+
+    all_lots = sorted(all_lots, key=lot_sort_value)
+
 
     # Sort and dedupe each section's boxes
     def sort_key(x: str):
@@ -348,7 +362,7 @@ def box_order_to_html(data):
 
         sec = sections[section_key]
 
-        for lot_key in sorted(all_lots):
+        for lot_key in all_lots:
             boxes = sec.get(lot_key, [])
             html.append("<tr>")
             html.append(f"<td class='lot-label'>{lot_key}</td>")
