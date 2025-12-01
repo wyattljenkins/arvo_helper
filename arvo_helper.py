@@ -120,15 +120,17 @@ def group_by_barn(data):
 def barns_to_html(barns):
     html = [
         "<html><head><meta charset='utf-8'>",
-        "<title>Arvo Helper</title>",
+        "<title>Afternoon Tasklist</title>",
         "<style>",
+        ".back-link { margin-bottom: 12px; display: inline-block; }",
         "body { font-family: Arial; padding: 20px; }",
         "h1 { font-size: 24px; }",
         ".both { color: #d633ff; font-weight: bold; }",
         "h2 { margin-top: 20px; margin-bottom: 5px; }",
         "</style>",
         "</head><body>",
-        "<h1>Arvo Tasks</h1>"
+        "<a href='/' class='back-link'>&larr; Back to menu</a>",
+        "<h1>Afternoon Shift Tasks</h1>"
     ]
 
     trot_key = "Trot Up PM"
@@ -350,7 +352,6 @@ def box_order_to_html(data):
         "<a href='/' class='back-link'>&larr; Back to menu</a>",
         "<h1>Box Order</h1>",
         "<div class='subtitle'>Tick off boxes as you muck out, so no horse comes back to a dirty box.</div>",
-        debug_html,
         f"<div class='debug'>Debug: total tasks={stats['total_tasks']}, "
         f"with lot={stats['with_lot']}, with box={stats['with_box']}, "
         f"ABC entries={stats['abc_entries']}, D entries={stats['d_entries']}</div>",
