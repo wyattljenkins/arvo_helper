@@ -47,9 +47,12 @@ def prism_login(username, password):
     return session
 
 
+MEL_TZ = ZoneInfo("Australia/Melbourne")
 def date_to_epoch_ms(dt: date):
-    dt_midnight = datetime(dt.year, dt.month, dt.day)
+    # Interpret dt as midnight in Melbourne time, no matter where the server is
+    dt_midnight = datetime(dt.year, dt.month, dt.day, tzinfo=MEL_TZ)
     return int(dt_midnight.timestamp() * 1000)
+
 
 
 def fetch_trackwork(session, dt: date):
