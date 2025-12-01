@@ -200,6 +200,9 @@ def _parse_lot_number(group_name: str):
     except ValueError:
         return None
     
+from collections import defaultdict  # at top of file if not already there
+
+
 def box_order_to_html(data):
     """
     Build HTML for box order, grouped into:
@@ -213,8 +216,6 @@ def box_order_to_html(data):
 
     # sections['abc'][lot] -> [box numbers]
     # sections['d'][lot]   -> [box numbers]
-    from collections import defaultdict
-
     sections = {
         "abc": defaultdict(list),
         "d": defaultdict(list),
@@ -222,30 +223,45 @@ def box_order_to_html(data):
 
     all_lots = set()
 
+    # simple stats to debug what we're seeing
+    stats = {
+        "total_tasks": len(tasks),
+        "with_lot": 0,
+        "with_box": 0,
+        "abc_entries": 0,
+        "d_entries": 0,
+    }
+
     for task in tasks:
         barn_name = task.get("barnName") or (task.get("barn") or {}).get("name")
         group_name = task.get("groupName") or ""
         lot_no = _parse_lot_number(group_name)
 
-        box_name = (
-            task.get("boxName")
-            or (task.get("boxInfo") or {}).get("name")
-        )
-
-        if not barn_name or lot_no is None or not box_name:
+        # lot parsing
+        if lot_no is None:
             continue
+        stats["with_lot"] += 1
 
-        # Normalise box as string, but we’ll sort numerically later
+        box_name = task.get("boxName") or (task.get("boxInfo") or {}).get("name")
+        if not box_name:
+            continue
         box_str = str(box_name).strip()
         if not box_str:
             continue
+        stats["with_box"] += 1
 
-        # Decide which section
+        # decide which section based on barn
         section_key = None
-        if barn_name.startswith("Barn D"):
-            section_key = "d"
-        elif barn_name.startswith("Barn A") or barn_name.startswith("Barn B") or barn_name.startswith("Barn C"):
-            section_key = "abc"
+        if barn_name:
+            if barn_name.startswith("Barn D"):
+                section_key = "d"
+            elif barn_name.startswith("Barn A") or barn_name.startswith("Barn B") or barn_name.startswith("Barn C"):
+                section_key = "abc"
+
+        if section_key == "abc":
+            stats["abc_entries"] += 1
+        elif section_key == "d":
+            stats["d_entries"] += 1
 
         if not section_key:
             # ignore other barns for now
@@ -257,14 +273,14 @@ def box_order_to_html(data):
     all_lots = sorted(all_lots)
 
     # Sort and dedupe each section's boxes
+    def sort_key(x: str):
+        try:
+            return int(x)
+        except ValueError:
+            return x
+
     for sec in sections.values():
         for lot, boxes in sec.items():
-            # numeric sort if possible, fall back to string
-            def sort_key(x):
-                try:
-                    return int(x)
-                except ValueError:
-                    return x
             unique = sorted(set(boxes), key=sort_key)
             sec[lot] = unique
 
@@ -278,7 +294,8 @@ def box_order_to_html(data):
         "<style>",
         "body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #f5f5f5; }",
         "h1 { margin-bottom: 0.25rem; }",
-        ".subtitle { color: #555; margin-bottom: 1.25rem; }",
+        ".subtitle { color: #555; margin-bottom: 0.5rem; }",
+        ".debug { color: #999; font-size: 12px; margin-bottom: 1.25rem; }",
         ".section { background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }",
         ".section h2 { margin-top: 0; margin-bottom: 0.75rem; }",
         "table { border-collapse: collapse; width: 100%; max-width: 500px; }",
@@ -293,9 +310,12 @@ def box_order_to_html(data):
         "<a href='/' class='back-link'>&larr; Back to menu</a>",
         "<h1>Box Order</h1>",
         "<div class='subtitle'>Tick off boxes as you muck out, so no horse comes back to a dirty box.</div>",
+        f"<div class='debug'>Debug: total tasks={stats['total_tasks']}, "
+        f"with lot={stats['with_lot']}, with box={stats['with_box']}, "
+        f"ABC entries={stats['abc_entries']}, D entries={stats['d_entries']}</div>",
     ]
 
-    # Helper to render a section
+
     def render_section(title, section_key):
         html.append("<div class='section'>")
         html.append(f"<h2>{title}</h2>")
@@ -311,9 +331,7 @@ def box_order_to_html(data):
             if boxes:
                 html.append("<td class='boxes'>")
                 for b in boxes:
-                    html.append(
-                        f"<label><input type='checkbox'> {b}</label>"
-                    )
+                    html.append(f"<label><input type='checkbox'> {b}</label>")
                 html.append("</td>")
             else:
                 html.append("<td class='boxes'>–</td>")
@@ -328,4 +346,5 @@ def box_order_to_html(data):
     html.append("</body></html>")
 
     return "\n".join(html)
+
 
