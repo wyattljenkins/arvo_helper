@@ -2,6 +2,10 @@ import hashlib
 import requests
 from datetime import datetime, date
 from collections import defaultdict
+import os
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
+
 
 # ---------------------------
 # LOGIN + DATA FETCH
@@ -156,15 +160,18 @@ def barns_to_html(barns):
     return "\n".join(html)
 
 def get_box_order_html():
-    # Re-use the same login + fetch as Arvo tasks
-    username = "ben.gleeson"
-    password = "ben8295"
+    # Use the same env-based secrets as get_arvo_html
+    username = os.environ["PRISM_USER"]
+    password = os.environ["PRISM_PASS"]
+
+    # Melbourne "today" so Fly (UTC) doesn't ask for yesterday's schedule
+    today = datetime.now(ZoneInfo("Australia/Melbourne")).date()
 
     session = prism_login(username, password)
-    today = datetime.now().date()
-
     data = fetch_trackwork(session, today)
     return box_order_to_html(data)
+
+
 
 
 def get_arvo_html():
