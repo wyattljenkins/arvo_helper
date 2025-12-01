@@ -1,15 +1,16 @@
 import hashlib
-import requests
-from datetime import datetime, date
-from collections import defaultdict
+import json
 import os
+from collections import defaultdict
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
+import requests
 
 # ---------------------------
 # LOGIN + DATA FETCH
 # ---------------------------
+
 
 def prism_login(username, password):
     login_url = "https://www.prism.horse/api/login"
@@ -22,14 +23,14 @@ def prism_login(username, password):
         "Referer": "https://www.prism.horse/portal/login",
         "x-auth-username": username,
         "x-auth-password": hashed_pw,
-        "x-auth-token": "null"
+        "x-auth-token": "null",
     }
 
     payload = {
         "platformType": 3,
         "platformVersion": "1.0",
         "deviceToken": "57ab57f07cd139d83913c9a97e61878e",
-        "deviceId": "57ab57f07cd139d83913c9a97e61878e"
+        "deviceId": "57ab57f07cd139d83913c9a97e61878e",
     }
 
     session = requests.Session()
@@ -39,20 +40,23 @@ def prism_login(username, password):
     data = resp.json()
     token = data["responseData"]["token"]
 
-    session.headers.update({
-        "x-auth-token": token,
-        "User-Agent": "Mozilla/5.0"
-    })
+    session.headers.update(
+        {
+            "x-auth-token": token,
+            "User-Agent": "Mozilla/5.0",
+        }
+    )
 
     return session
 
 
 MEL_TZ = ZoneInfo("Australia/Melbourne")
-def date_to_epoch_ms(dt: date):
-    # Interpret dt as midnight in Melbourne time, no matter where the server is
+
+
+def date_to_epoch_ms(dt: date) -> int:
+    """Interpret dt as midnight in Melbourne time, no matter where the server is."""
     dt_midnight = datetime(dt.year, dt.month, dt.day, tzinfo=MEL_TZ)
     return int(dt_midnight.timestamp() * 1000)
-
 
 
 def fetch_trackwork(session, dt: date):
@@ -65,8 +69,9 @@ def fetch_trackwork(session, dt: date):
 
 
 # ---------------------------
-# PROCESSING / GROUPING
+# PROCESSING / GROUPING (ARVO)
 # ---------------------------
+
 
 def group_by_barn(data):
     trot_key = "Trot Up PM"
@@ -113,10 +118,6 @@ def group_by_barn(data):
     return barns
 
 
-# ---------------------------
-# HTML RENDERING
-# ---------------------------
-
 def barns_to_html(barns):
     html = [
         "<html><head><meta charset='utf-8'>",
@@ -130,7 +131,7 @@ def barns_to_html(barns):
         "</style>",
         "</head><body>",
         "<a href='/' class='back-link'>&larr; Back to menu</a>",
-        "<h1>Afternoon Shift Tasks</h1>"
+        "<h1>Afternoon Shift Tasks</h1>",
     ]
 
     trot_key = "Trot Up PM"
@@ -164,28 +165,15 @@ def barns_to_html(barns):
     html.append("</body></html>")
     return "\n".join(html)
 
-def get_box_order_html():
-    # Use the same env-based secrets as get_arvo_html
+
+def get_arvo_html():
+    # Use env-based secrets + Melbourne date for consistency with deployment
     username = os.environ["PRISM_USER"]
     password = os.environ["PRISM_PASS"]
 
-    # Melbourne "today" so Fly (UTC) doesn't ask for yesterday's schedule
-    today = datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    today = datetime.now(MEL_TZ).date()
 
     session = prism_login(username, password)
-    data = fetch_trackwork(session, today)
-    return box_order_to_html(data)
-
-
-
-
-def get_arvo_html():
-    username = "ben.gleeson"
-    password = "ben8295"
-
-    session = prism_login(username, password)
-    today = datetime.now().date()
-
     data = fetch_trackwork(session, today)
     barns = group_by_barn(data)
     return barns_to_html(barns)
@@ -194,6 +182,7 @@ def get_arvo_html():
 # ---------------------------
 # BOX ORDER (MUCK OUT) HELPERS
 # ---------------------------
+
 
 def _parse_lot_number(group_name: str):
     """
@@ -211,42 +200,27 @@ def _parse_lot_number(group_name: str):
         return int(parts[1])
     except ValueError:
         return None
-    
-from collections import defaultdict  # at top of file if not already there
 
 
-def box_order_to_html(data):
+def box_order_to_html(data, day_date: date) -> str:
     """
     Build HTML for box order, grouped into:
       - Section 1: Barns A, B, C
       - Section 2: Barn D
 
-    Output looks like a tick-list per lot, per section.
+    Checkboxes are wired to /api/boxes/state so multiple users
+    see updates in (near) real-time.
     """
     resp = data.get("responseData", {})
     tasks = resp.get("tasks", [])
 
-        # ---- DEBUG: show first 3 tasks for inspection ----
-    import json
-    sample_tasks = json.dumps(tasks[:3], indent=2)
-
-    debug_html = f"""
-    <div style='white-space:pre-wrap; font-size:12px; background:#f0f0f0; padding:10px; margin:10px 0;'>
-    <b>DEBUG TASK SAMPLE:</b>\n{sample_tasks}
-    </div>
-    """
-
-
-    # sections['abc'][lot] -> [box numbers]
-    # sections['d'][lot]   -> [box numbers]
-    sections = {
+    # sections['abc'][lot_label] -> [box numbers]
+    # sections['d'][lot_label]   -> [box numbers]
+    sections: dict[str, dict[str, list[str]]] = {
         "abc": defaultdict(list),
         "d": defaultdict(list),
     }
 
-    all_lots = set()
-
-    # simple stats to debug what we're seeing
     stats = {
         "total_tasks": len(tasks),
         "with_lot": 0,
@@ -255,29 +229,53 @@ def box_order_to_html(data):
         "d_entries": 0,
     }
 
+    all_lots = set()
+
+    # --- Pass 1: build mapping from parent task id -> 'Lot X' label ---
+    lot_id_to_label: dict[int, str] = {}
+
+    for t in tasks:
+        group_name = (t.get("groupName") or "").strip()
+        lot_num = _parse_lot_number(group_name)
+        if lot_num is not None:
+            lot_id_to_label[t.get("id")] = f"Lot {lot_num}"
+
+    # --- Pass 2: assign each task to a lot (if applicable) and section ---
     for task in tasks:
         barn_name = task.get("barnName") or (task.get("barn") or {}).get("name")
-
         group_name = (task.get("groupName") or "").strip()
-        # We only care about real Lots (e.g. 'Lot 1 4:45')
-        lot_num = _parse_lot_number(group_name)
-        if lot_num is None:
-            continue  # skip numeric IDs, 'Walking', 'Swimming', etc.
 
-        # Use 'Lot 1', 'Lot 2', ... as the display label
-        lot_key = f"Lot {lot_num}"
+        # Figure out lot label for this task
+        lot_label = None
+
+        # Case 1: this task itself has 'Lot X 4:45'
+        lot_num_direct = _parse_lot_number(group_name)
+        if lot_num_direct is not None:
+            lot_label = f"Lot {lot_num_direct}"
+        else:
+            # Case 2: groupName is numeric -> lookup parent lot by id
+            if group_name.isdigit():
+                parent_id = int(group_name)
+                lot_label = lot_id_to_label.get(parent_id)
+
+        if not lot_label:
+            # not part of a lot we care about
+            continue
+
         stats["with_lot"] += 1
 
+        # Box
         box_name = task.get("boxName") or (task.get("boxInfo") or {}).get("name")
         if not box_name:
             continue
         box_str = str(box_name).strip()
         if not box_str:
             continue
+
         stats["with_box"] += 1
 
-        # decide which section based on barn
-        section_key = None
+        # Section by barn
+        section_key: str | None = None
         if barn_name:
             if barn_name.startswith("Barn D"):
                 section_key = "d"
@@ -296,26 +294,12 @@ def box_order_to_html(data):
         if not section_key:
             continue
 
-        sections[section_key][lot_key].append(box_str)
-        all_lots.add(lot_key)
+        sections[section_key][lot_label].append(box_str)
+        all_lots.add(lot_label)
 
+    # --- Sort & dedupe boxes, and sort lots numerically ---
 
-
-    # Extract lot numbers from labels like 'Lot 1'
-    def lot_sort_value(label: str) -> int:
-        parts = label.split()
-        if len(parts) >= 2:
-            try:
-                return int(parts[1])
-            except ValueError:
-                pass
-        return 9999  # fallback, should not really happen for valid lots
-
-    all_lots = sorted(all_lots, key=lot_sort_value)
-
-
-    # Sort and dedupe each section's boxes
-    def sort_key(x: str):
+    def sort_key_box(x: str):
         try:
             return int(x)
         except ValueError:
@@ -323,10 +307,24 @@ def box_order_to_html(data):
 
     for sec in sections.values():
         for lot, boxes in sec.items():
-            unique = sorted(set(boxes), key=sort_key)
+            unique = sorted(set(boxes), key=sort_key_box)
             sec[lot] = unique
 
-    # Build HTML
+    def lot_sort_value(label: str) -> int:
+        parts = label.split()
+        if len(parts) >= 2:
+            try:
+                return int(parts[1])
+            except ValueError:
+                pass
+        return 9999
+
+    sorted_lots = sorted(all_lots, key=lot_sort_value)
+
+    # --- Build HTML ---
+
+    date_str = day_date.isoformat()
+
     html = [
         "<!doctype html>",
         "<html>",
@@ -348,7 +346,7 @@ def box_order_to_html(data):
         ".back-link { margin-bottom: 12px; display: inline-block; }",
         "</style>",
         "</head>",
-        "<body>",
+        f"<body data-date='{date_str}'>",
         "<a href='/' class='back-link'>&larr; Back to menu</a>",
         "<h1>Box Order</h1>",
         "<div class='subtitle'>Tick off boxes as you muck out, so no horse comes back to a dirty box.</div>",
@@ -357,8 +355,7 @@ def box_order_to_html(data):
         f"ABC entries={stats['abc_entries']}, D entries={stats['d_entries']}</div>",
     ]
 
-
-    def render_section(title, section_key):
+    def render_section(title: str, section_key: str):
         html.append("<div class='section'>")
         html.append(f"<h2>{title}</h2>")
         html.append("<table>")
@@ -366,14 +363,18 @@ def box_order_to_html(data):
 
         sec = sections[section_key]
 
-        for lot_key in all_lots:
-            boxes = sec.get(lot_key, [])
+        for lot_label in sorted_lots:
+            boxes = sec.get(lot_label, [])
             html.append("<tr>")
-            html.append(f"<td class='lot-label'>{lot_key}</td>")
+            html.append(f"<td class='lot-label'>{lot_label}</td>")
             if boxes:
                 html.append("<td class='boxes'>")
-                #for b in boxes:
-                    ##html.append(f"<label><input type='checkbox'> {b}</label>")
+                for b in boxes:
+                    key = f"{section_key}|{lot_label}|{b}"
+                    html.append(
+                        f"<label><input type='checkbox' class='box-check' "
+                        f"data-key='{key}'> {b}</label>"
+                    )
                 html.append("</td>")
             else:
                 html.append("<td class='boxes'>–</td>")
@@ -385,8 +386,70 @@ def box_order_to_html(data):
     render_section("Barns A, B, C", "abc")
     render_section("Barn D", "d")
 
+    # --- JS for real-time-ish syncing via polling ---
+
+    html.append(
+        """
+<script>
+(function() {
+  const body = document.body;
+  const date = body.getAttribute('data-date');
+  const checkboxes = Array.from(document.querySelectorAll('.box-check'));
+
+  function applyState(state) {
+    checkboxes.forEach(cb => {
+      const key = cb.dataset.key;
+      if (Object.prototype.hasOwnProperty.call(state, key)) {
+        cb.checked = !!state[key];
+      }
+    });
+  }
+
+  function fetchState() {
+    fetch(`/api/boxes/state?date=${encodeURIComponent(date)}`)
+      .then(r => r.json())
+      .then(applyState)
+      .catch(console.error);
+  }
+
+  // Initial load
+  fetchState();
+
+  // When user changes a checkbox, send update
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      const payload = {
+        date: date,
+        key: cb.dataset.key,
+        checked: cb.checked
+      };
+      fetch('/api/boxes/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(console.error);
+    });
+  });
+
+  // Poll every 3 seconds to pick up others' changes
+  setInterval(fetchState, 3000);
+})();
+</script>
+"""
+    )
+
     html.append("</body></html>")
 
     return "\n".join(html)
 
 
+def get_box_order_html():
+    # Env-based secrets + Melbourne "today" (to avoid UTC off-by-one)
+    username = os.environ["PRISM_USER"]
+    password = os.environ["PRISM_PASS"]
+
+    today = datetime.now(MEL_TZ).date()
+
+    session = prism_login(username, password)
+    data = fetch_trackwork(session, today)
+    return box_order_to_html(data, today)

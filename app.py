@@ -1,7 +1,12 @@
-from flask import Flask, Response
+from flask import Flask, Response, jsonify, request
 from arvo_helper import get_arvo_html, get_box_order_html
 
 app = Flask(__name__)
+
+# In-memory store for checkbox state:
+# { "YYYY-MM-DD": { "section|Lot X|box": true/false, ... } }
+BOX_STATE: dict[str, dict[str, bool]] = {}
+
 
 @app.route("/")
 def home():
@@ -47,15 +52,43 @@ def home():
     </html>
     """
 
+
 @app.route("/arvo")
 def arvo():
     html = get_arvo_html()
     return Response(html, mimetype="text/html")
 
+
 @app.route("/boxes")
 def boxes():
     html = get_box_order_html()
     return Response(html, mimetype="text/html")
+
+
+# ---- Real-time box state API ----
+
+@app.route("/api/boxes/state", methods=["GET"])
+def get_boxes_state():
+    """Return checkbox state for a given date (YYYY-MM-DD)."""
+    date = request.args.get("date")
+    if not date:
+        return jsonify({})
+    return jsonify(BOX_STATE.get(date, {}))
+
+
+@app.route("/api/boxes/state", methods=["POST"])
+def update_boxes_state():
+    """Update checkbox state for a given date + key."""
+    payload = request.get_json(force=True) or {}
+    date = payload.get("date")
+    key = payload.get("key")
+    checked = bool(payload.get("checked"))
+
+    if not date or not key:
+        return jsonify({"ok": False, "error": "missing date or key"}), 400
+
+    BOX_STATE.setdefault(date, {})[key] = checked
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
