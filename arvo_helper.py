@@ -69,7 +69,7 @@ def fetch_trackwork(session, dt: date):
 
 
 # ---------------------------
-# PROCESSING / GROUPING (ARVO)
+# ARVO TASKS
 # ---------------------------
 
 
@@ -119,23 +119,85 @@ def group_by_barn(data):
 
 
 def barns_to_html(barns):
-    html = [
-        "<html><head><meta charset='utf-8'>",
-        "<title>Afternoon Tasklist</title>",
-        "<style>",
-        ".back-link { margin-bottom: 12px; display: inline-block; }",
-        "body { font-family: Arial; padding: 20px; }",
-        "h1 { font-size: 24px; }",
-        ".both { color: #d633ff; font-weight: bold; }",
-        "h2 { margin-top: 20px; margin-bottom: 5px; }",
-        "</style>",
-        "</head><body>",
-        "<a href='/' class='back-link'>&larr; Back to menu</a>",
-        "<h1>Afternoon Shift Tasks</h1>",
-    ]
-
     trot_key = "Trot Up PM"
     swim_key = "Swim 1 PM"
+
+    html = [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        "<meta charset='utf-8'>",
+        "<title>Afternoon Tasks - Te Akau</title>",
+        "<style>",
+        ":root {",
+        "  --ta-tangerine: #f58220;",
+        "  --ta-tangerine-dark: #e06f10;",
+        "  --ta-navy: #002a4d;",
+        "  --ta-bg: #f5f5f5;",
+        "  --ta-text: #222222;",
+        "}",
+        "* { box-sizing: border-box; }",
+        "body {",
+        "  margin: 0;",
+        "  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;",
+        "  color: var(--ta-text);",
+        "  background: linear-gradient(180deg, var(--ta-navy) 0, var(--ta-navy) 220px, var(--ta-bg) 220px);",
+        "}",
+        ".shell { max-width: 960px; margin: 0 auto; padding: 24px 20px 40px; }",
+        ".top-bar { display: flex; align-items: center; justify-content: space-between; color: #fff; }",
+        ".brand-mark { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.9; }",
+        ".top-bar-title { font-size: 26px; font-weight: 700; margin: 6px 0 0; }",
+        ".card {",
+        "  background: #ffffff;",
+        "  border-radius: 18px;",
+        "  padding: 22px 22px 26px;",
+        "  margin-top: 28px;",
+        "  box-shadow: 0 18px 36px rgba(0,0,0,0.12);",
+        "}",
+        ".back-link {",
+        "  display: inline-flex;",
+        "  align-items: center;",
+        "  gap: 6px;",
+        "  text-decoration: none;",
+        "  font-size: 13px;",
+        "  color: var(--ta-navy);",
+        "  margin-bottom: 8px;",
+        "}",
+        ".back-link span { font-size: 16px; }",
+        ".page-title { margin: 4px 0 2px; font-size: 22px; color: var(--ta-navy); }",
+        ".subtitle { font-size: 14px; color: #555; margin-bottom: 16px; }",
+        ".divider { width: 60px; height: 3px; background: var(--ta-tangerine); border-radius: 999px; margin-bottom: 18px; }",
+        "h2 { margin: 18px 0 4px; font-size: 18px; color: var(--ta-navy); }",
+        "strong { color: var(--ta-navy); }",
+        "ul { margin: 4px 0 10px 18px; padding: 0; }",
+        "li { margin: 2px 0; }",
+        "li.both { color: var(--ta-tangerine-dark); font-weight: 600; }",
+        ".legend { font-size: 12px; color: #777; margin-bottom: 10px; }",
+        "@media (max-width: 600px) {",
+        "  .card { padding: 18px 16px 22px; }",
+        "  .top-bar-title { font-size: 22px; }",
+        "}",
+        "</style>",
+        "</head>",
+        "<body>",
+        "<div class='shell'>",
+        "  <header class='top-bar'>",
+        "    <div>",
+        "      <div class='brand-mark'>Te Akau Racing · Cranbourne</div>",
+        "      <div class='top-bar-title'>Afternoon Tasks</div>",
+        "    </div>",
+        "  </header>",
+        "  <main class='card'>",
+        "    <a href='/' class='back-link'><span>&larr;</span> Back to menu</a>",
+        "    <h1 class='page-title'>Horses to Trot Up &amp; Swim</h1>",
+        "    <p class='subtitle'>Auto-generated from today&#39;s Prism schedule for Mark Walker.</p>",
+        "    <div class='divider'></div>",
+        "    <div class='legend'><strong>Note:</strong> names shown in tangerine appear in both "
+        + trot_key
+        + " and "
+        + swim_key
+        + ".</div>",
+    ]
 
     for barn in sorted(barns.keys()):
         trot = barns[barn][trot_key]
@@ -149,25 +211,28 @@ def barns_to_html(barns):
         html.append(f"<h2>{barn}</h2>")
 
         if trot:
-            html.append(f"<strong>{trot_key}</strong><ul>")
+            html.append(f"<strong>{trot_key}</strong>")
+            html.append("<ul>")
             for h in trot:
                 cls = "both" if h in both else ""
                 html.append(f"<li class='{cls}'>{h}</li>")
             html.append("</ul>")
 
         if swim:
-            html.append(f"<strong>{swim_key}</strong><ul>")
+            html.append(f"<strong>{swim_key}</strong>")
+            html.append("<ul>")
             for h in swim:
                 cls = "both" if h in both else ""
                 html.append(f"<li class='{cls}'>{h}</li>")
             html.append("</ul>")
 
+    html.append("  </main>")
+    html.append("</div>")
     html.append("</body></html>")
     return "\n".join(html)
 
 
 def get_arvo_html():
-    # Use env-based secrets + Melbourne date for consistency with deployment
     username = os.environ["PRISM_USER"]
     password = os.environ["PRISM_PASS"]
 
@@ -180,7 +245,7 @@ def get_arvo_html():
 
 
 # ---------------------------
-# BOX ORDER (MUCK OUT) HELPERS
+# BOX ORDER (MUCK OUT)
 # ---------------------------
 
 
@@ -205,20 +270,27 @@ def _parse_lot_number(group_name: str):
 def box_order_to_html(data, day_date: date) -> str:
     """
     Build HTML for box order, grouped into:
-      - Section 1: Barns A, B, C
-      - Section 2: Barn D
+      - Section 1: Barns A, B, C (lots + treadmills)
+      - Section 2: Barn D (lots + treadmills)
 
-    Checkboxes are wired to /api/boxes/state so multiple users
-    see updates in (near) real-time.
+    Treadmills:
+      - Detected via 'treadmill' in groupName (case-insensitive).
+      - Box order is preserved in Prism order per section.
+      - Rendered to the right of the Lots table.
     """
     resp = data.get("responseData", {})
     tasks = resp.get("tasks", [])
 
-    # sections['abc'][lot_label] -> [box numbers]
-    # sections['d'][lot_label]   -> [box numbers]
+    # Lots by section
     sections: dict[str, dict[str, list[str]]] = {
         "abc": defaultdict(list),
         "d": defaultdict(list),
+    }
+
+    # Treadmills by section (preserve order)
+    treadmill_sections: dict[str, list[str]] = {
+        "abc": [],
+        "d": [],
     }
 
     stats = {
@@ -240,12 +312,36 @@ def box_order_to_html(data, day_date: date) -> str:
         if lot_num is not None:
             lot_id_to_label[t.get("id")] = f"Lot {lot_num}"
 
-    # --- Pass 2: assign each task to a lot (if applicable) and section ---
+    # --- Pass 2: assign each task to a lot or treadmill ---
     for task in tasks:
         barn_name = task.get("barnName") or (task.get("barn") or {}).get("name")
         group_name = (task.get("groupName") or "").strip()
+        group_lower = group_name.lower()
 
-        # Figure out lot label for this task
+        # Determine section (ABC vs D)
+        section_key: str | None = None
+        if barn_name:
+            if barn_name.startswith("Barn D"):
+                section_key = "d"
+            elif (
+                barn_name.startswith("Barn A")
+                or barn_name.startswith("Barn B")
+                or barn_name.startswith("Barn C")
+            ):
+                section_key = "abc"
+
+        # Box name (if any)
+        box_name = task.get("boxName") or (task.get("boxInfo") or {}).get("name")
+        box_str = str(box_name).strip() if box_name else ""
+
+        # --- Treadmills: capture and preserve order, then skip lot logic ---
+        if "treadmill" in group_lower:
+            if section_key and box_str:
+                treadmill_sections[section_key].append(box_str)
+            # treadmills are not lots, so continue to next task
+            continue
+
+        # --- Lots: as before ---
         lot_label = None
 
         # Case 1: this task itself has 'Lot X 4:45'
@@ -259,32 +355,15 @@ def box_order_to_html(data, day_date: date) -> str:
                 lot_label = lot_id_to_label.get(parent_id)
 
         if not lot_label:
-            # not part of a lot we care about
+            # Not a lot or treadmill
             continue
 
         stats["with_lot"] += 1
 
-        # Box
-        box_name = task.get("boxName") or (task.get("boxInfo") or {}).get("name")
-        if not box_name:
-            continue
-        box_str = str(box_name).strip()
         if not box_str:
             continue
 
         stats["with_box"] += 1
-
-        # Section by barn
-        section_key: str | None = None
-        if barn_name:
-            if barn_name.startswith("Barn D"):
-                section_key = "d"
-            elif (
-                barn_name.startswith("Barn A")
-                or barn_name.startswith("Barn B")
-                or barn_name.startswith("Barn C")
-            ):
-                section_key = "abc"
 
         if section_key == "abc":
             stats["abc_entries"] += 1
@@ -321,8 +400,6 @@ def box_order_to_html(data, day_date: date) -> str:
 
     sorted_lots = sorted(all_lots, key=lot_sort_value)
 
-    # --- Build HTML ---
-
     date_str = day_date.isoformat()
 
     html = [
@@ -332,119 +409,239 @@ def box_order_to_html(data, day_date: date) -> str:
         "<meta charset='utf-8'>",
         "<title>Box Order - Te Akau</title>",
         "<style>",
-        "body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #f5f5f5; }",
-        "h1 { margin-bottom: 0.25rem; }",
-        ".subtitle { color: #555; margin-bottom: 0.5rem; }",
-        ".debug { color: #999; font-size: 12px; margin-bottom: 1.25rem; }",
-        ".section { background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }",
-        ".section h2 { margin-top: 0; margin-bottom: 0.75rem; }",
-        "table { border-collapse: collapse; width: 100%; max-width: 500px; }",
-        "th, td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }",
-        "th { text-align: left; font-weight: 600; }",
-        ".lot-label { white-space: nowrap; }",
-        ".boxes label { margin-right: 8px; display: inline-block; }",
-        ".back-link { margin-bottom: 12px; display: inline-block; }",
+        ":root {",
+        "  --ta-tangerine: #f58220;",
+        "  --ta-tangerine-dark: #e06f10;",
+        "  --ta-navy: #002a4d;",
+        "  --ta-bg: #f5f5f5;",
+        "  --ta-text: #222222;",
+        "}",
+        "* { box-sizing: border-box; }",
+        "body {",
+        "  margin: 0;",
+        "  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;",
+        "  color: var(--ta-text);",
+        "  background: linear-gradient(180deg, var(--ta-navy) 0, var(--ta-navy) 220px, var(--ta-bg) 220px);",
+        "}",
+        ".shell { max-width: 960px; margin: 0 auto; padding: 24px 20px 40px; }",
+        ".top-bar { display: flex; align-items: center; justify-content: space-between; color: #fff; }",
+        ".brand-mark { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.9; }",
+        ".top-bar-title { font-size: 26px; font-weight: 700; margin: 6px 0 0; }",
+        ".card {",
+        "  background: #ffffff;",
+        "  border-radius: 18px;",
+        "  padding: 22px 22px 26px;",
+        "  margin-top: 28px;",
+        "  box-shadow: 0 18px 36px rgba(0,0,0,0.12);",
+        "}",
+        ".back-link {",
+        "  display: inline-flex;",
+        "  align-items: center;",
+        "  gap: 6px;",
+        "  text-decoration: none;",
+        "  font-size: 13px;",
+        "  color: var(--ta-navy);",
+        "  margin-bottom: 8px;",
+        "}",
+        ".back-link span { font-size: 16px; }",
+        ".page-title { margin: 4px 0 2px; font-size: 22px; color: var(--ta-navy); }",
+        ".subtitle { font-size: 14px; color: #555; margin-bottom: 10px; }",
+        ".debug { font-size: 11px; color: #999; margin-bottom: 16px; }",
+        ".section {",
+        "  margin-top: 18px;",
+        "  padding-top: 4px;",
+        "}",
+        ".section h2 { font-size: 18px; color: var(--ta-navy); margin: 0 0 8px; }",
+        ".section-grid {",
+        "  display: grid;",
+        "  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.2fr);",
+        "  gap: 16px;",
+        "  align-items: flex-start;",
+        "}",
+        ".panel {",
+        "  background: #fff;",
+        "  border-radius: 12px;",
+        "  padding: 10px 10px 12px;",
+        "  box-shadow: 0 1px 3px rgba(0,0,0,0.06);",
+        "}",
+        ".panel-title {",
+        "  font-size: 14px;",
+        "  font-weight: 600;",
+        "  color: var(--ta-navy);",
+        "  margin: 0 0 6px;",
+        "}",
+        "table {",
+        "  border-collapse: collapse;",
+        "  width: 100%;",
+        "  background: #fff;",
+        "}",
+        "th, td {",
+        "  padding: 6px 8px;",
+        "  border-bottom: 1px solid #eee;",
+        "  vertical-align: top;",
+        "  font-size: 13px;",
+        "}",
+        "th { text-align: left; font-weight: 600; color: var(--ta-navy); }",
+        ".lot-label { white-space: nowrap; font-weight: 600; }",
+        ".boxes label {",
+        "  margin-right: 8px;",
+        "  display: inline-flex;",
+        "  align-items: center;",
+        "  gap: 3px;",
+        "  padding: 2px 0;",
+        "}",
+        ".boxes input[type='checkbox'] {",
+        "  accent-color: var(--ta-tangerine);",
+        "}",
+        "@media (max-width: 700px) {",
+        "  .card { padding: 18px 16px 22px; }",
+        "  .top-bar-title { font-size: 22px; }",
+        "  .section-grid { grid-template-columns: minmax(0, 1fr); }",
+        "}",
         "</style>",
         "</head>",
         f"<body data-date='{date_str}'>",
-        "<a href='/' class='back-link'>&larr; Back to menu</a>",
-        "<h1>Box Order</h1>",
-        "<div class='subtitle'>Tick off boxes as you muck out, so no horse comes back to a dirty box.</div>",
-        f"<div class='debug'>Debug: total tasks={stats['total_tasks']}, "
+        "<div class='shell'>",
+        "  <header class='top-bar'>",
+        "    <div>",
+        "      <div class='brand-mark'>Te Akau Racing · Cranbourne</div>",
+        "      <div class='top-bar-title'>Box Order</div>",
+        "    </div>",
+        "  </header>",
+        "  <main class='card'>",
+        "    <a href='/' class='back-link'><span>&larr;</span> Back to menu</a>",
+        "    <h1 class='page-title'>Muck Out Checklist</h1>",
+        "    <p class='subtitle'>Tick off boxes as you muck out, so no horse comes back to a dirty box.</p>",
+        f"    <div class='debug'>Debug: total tasks={stats['total_tasks']}, "
         f"with lot={stats['with_lot']}, with box={stats['with_box']}, "
         f"ABC entries={stats['abc_entries']}, D entries={stats['d_entries']}</div>",
     ]
 
     def render_section(title: str, section_key: str):
-        html.append("<div class='section'>")
-        html.append(f"<h2>{title}</h2>")
-        html.append("<table>")
-        html.append("<tr><th>Lot</th><th>Boxes</th></tr>")
+        html.append(f"    <section class='section'>")
+        html.append(f"      <h2>{title}</h2>")
+        html.append("      <div class='section-grid'>")
+
+        # LEFT PANEL: LOTS
+        html.append("        <div class='panel'>")
+        html.append("          <div class='panel-title'>Lots</div>")
+        html.append("          <table>")
+        html.append("            <tr><th>Lot</th><th>Boxes</th></tr>")
 
         sec = sections[section_key]
 
         for lot_label in sorted_lots:
             boxes = sec.get(lot_label, [])
-            html.append("<tr>")
-            html.append(f"<td class='lot-label'>{lot_label}</td>")
+            html.append("            <tr>")
+            html.append(f"              <td class='lot-label'>{lot_label}</td>")
             if boxes:
-                html.append("<td class='boxes'>")
+                html.append("              <td class='boxes'>")
                 for b in boxes:
                     key = f"{section_key}|{lot_label}|{b}"
                     html.append(
-                        f"<label><input type='checkbox' class='box-check' "
+                        f"                <label><input type='checkbox' class='box-check' "
                         f"data-key='{key}'> {b}</label>"
                     )
-                html.append("</td>")
+                html.append("              </td>")
             else:
-                html.append("<td class='boxes'>–</td>")
-            html.append("</tr>")
+                html.append("              <td class='boxes'>–</td>")
+            html.append("            </tr>")
 
-        html.append("</table>")
-        html.append("</div>")
+        html.append("          </table>")
+        html.append("        </div>")  # end left panel
+
+        # RIGHT PANEL: TREADMILLS (if any)
+        tread_boxes = treadmill_sections[section_key]
+        if tread_boxes:
+            html.append("        <div class='panel'>")
+            html.append("          <div class='panel-title'>Treadmills</div>")
+            html.append("          <table>")
+            html.append("            <tr><th>Type</th><th>Boxes</th></tr>")
+            html.append("            <tr>")
+            html.append("              <td class='lot-label'>Treadmill</td>")
+            html.append("              <td class='boxes'>")
+            for b in tread_boxes:
+                key = f"{section_key}|Treadmill|{b}"
+                html.append(
+                    f"                <label><input type='checkbox' class='box-check' "
+                    f"data-key='{key}'> {b}</label>"
+                )
+            html.append("              </td>")
+            html.append("            </tr>")
+            html.append("          </table>")
+            html.append("        </div>")
+        else:
+            # If no treadmills, still output an empty panel for visual balance
+            html.append("        <div class='panel'>")
+            html.append("          <div class='panel-title'>Treadmills</div>")
+            html.append("          <p style='font-size: 12px; color: #888; margin: 4px 0 0;'>No treadmills today.</p>")
+            html.append("        </div>")
+
+        html.append("      </div>")  # section-grid
+        html.append("    </section>")
 
     render_section("Barns A, B, C", "abc")
     render_section("Barn D", "d")
 
-    # --- JS for real-time-ish syncing via polling ---
-
+    # Real-time checkbox sync (unchanged, now also covers treadmills)
     html.append(
         """
-<script>
-(function() {
-  const body = document.body;
-  const date = body.getAttribute('data-date');
-  const checkboxes = Array.from(document.querySelectorAll('.box-check'));
+    <script>
+    (function() {
+      const body = document.body;
+      const date = body.getAttribute('data-date');
+      const checkboxes = Array.from(document.querySelectorAll('.box-check'));
 
-  function applyState(state) {
-    checkboxes.forEach(cb => {
-      const key = cb.dataset.key;
-      if (Object.prototype.hasOwnProperty.call(state, key)) {
-        cb.checked = !!state[key];
+      function applyState(state) {
+        checkboxes.forEach(cb => {
+          const key = cb.dataset.key;
+          if (Object.prototype.hasOwnProperty.call(state, key)) {
+            cb.checked = !!state[key];
+          }
+        });
       }
-    });
-  }
 
-  function fetchState() {
-    fetch(`/api/boxes/state?date=${encodeURIComponent(date)}`)
-      .then(r => r.json())
-      .then(applyState)
-      .catch(console.error);
-  }
+      function fetchState() {
+        fetch(`/api/boxes/state?date=${encodeURIComponent(date)}`)
+          .then(r => r.json())
+          .then(applyState)
+          .catch(console.error);
+      }
 
-  // Initial load
-  fetchState();
+      // Initial load
+      fetchState();
 
-  // When user changes a checkbox, send update
-  checkboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
-      const payload = {
-        date: date,
-        key: cb.dataset.key,
-        checked: cb.checked
-      };
-      fetch('/api/boxes/state', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(console.error);
-    });
-  });
+      // When user changes a checkbox, send update
+      checkboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+          const payload = {
+            date: date,
+            key: cb.dataset.key,
+            checked: cb.checked
+          };
+          fetch('/api/boxes/state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(console.error);
+        });
+      });
 
-  // Poll every 3 seconds to pick up others' changes
-  setInterval(fetchState, 3000);
-})();
-</script>
-"""
+      // Poll every 5 seconds to pick up others' changes
+      setInterval(fetchState, 5000);
+    })();
+    </script>
+    """
     )
 
+    html.append("  </main>")
+    html.append("</div>")
     html.append("</body></html>")
 
     return "\n".join(html)
 
 
 def get_box_order_html():
-    # Env-based secrets + Melbourne "today" (to avoid UTC off-by-one)
     username = os.environ["PRISM_USER"]
     password = os.environ["PRISM_PASS"]
 
