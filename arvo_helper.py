@@ -372,9 +372,9 @@ def box_order_to_html(data):
             html.append(f"<td class='lot-label'>{lot_key}</td>")
             if boxes:
                 html.append("<td class='boxes'>")
-                for b in boxes:
-                    # html.append(f"<label><input type='checkbox'> {b}</label>")
-                    html.append("</td>")
+                #for b in boxes:
+                    ##html.append(f"<label><input type='checkbox'> {b}</label>")
+                html.append("</td>")
             else:
                 html.append("<td class='boxes'>–</td>")
             html.append("</tr>")
