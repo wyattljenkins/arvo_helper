@@ -1,8 +1,6 @@
-import os
 import hashlib
 import requests
-from datetime import datetime, date, timezone
-from zoneinfo import ZoneInfo
+from datetime import datetime, date
 from collections import defaultdict
 
 # ---------------------------
@@ -45,11 +43,9 @@ def prism_login(username, password):
     return session
 
 
-def date_to_epoch_ms(d: date) -> int:
-    """Return epoch ms for midnight in Australia/Melbourne on date d."""
-    local_midnight = datetime(d.year, d.month, d.day, tzinfo=ZoneInfo("Australia/Melbourne"))
-    utc_time = local_midnight.astimezone(timezone.utc)
-    return int(utc_time.timestamp() * 1000)
+def date_to_epoch_ms(dt: date):
+    dt_midnight = datetime(dt.year, dt.month, dt.day)
+    return int(dt_midnight.timestamp() * 1000)
 
 
 def fetch_trackwork(session, dt: date):
@@ -159,18 +155,177 @@ def barns_to_html(barns):
     html.append("</body></html>")
     return "\n".join(html)
 
-
-def get_arvo_html():
-    username = os.environ["PRISM_USER"]
-    password = os.environ["PRISM_PASS"]
+def get_box_order_html():
+    # Re-use the same login + fetch as Arvo tasks
+    username = "ben.gleeson"
+    password = "ben8295"
 
     session = prism_login(username, password)
+    today = datetime.now().date()
 
-    # Use Melbourne date, not server-UTC date
-    today = datetime.now(ZoneInfo("Australia/Melbourne")).date()
+    data = fetch_trackwork(session, today)
+    return box_order_to_html(data)
+
+
+def get_arvo_html():
+    username = "ben.gleeson"
+    password = "ben8295"
+
+    session = prism_login(username, password)
+    today = datetime.now().date()
 
     data = fetch_trackwork(session, today)
     barns = group_by_barn(data)
     return barns_to_html(barns)
 
+
+# ---------------------------
+# BOX ORDER (MUCK OUT) HELPERS
+# ---------------------------
+
+def _parse_lot_number(group_name: str):
+    """
+    Extract the lot number from a groupName like 'Lot 1 4:45'.
+    Returns an int or None if it can't be parsed.
+    """
+    if not group_name:
+        return None
+    parts = group_name.split()
+    if len(parts) < 2:
+        return None
+    if parts[0].lower() != "lot":
+        return None
+    try:
+        return int(parts[1])
+    except ValueError:
+        return None
+    
+def box_order_to_html(data):
+    """
+    Build HTML for box order, grouped into:
+      - Section 1: Barns A, B, C
+      - Section 2: Barn D
+
+    Output looks like a tick-list per lot, per section.
+    """
+    resp = data.get("responseData", {})
+    tasks = resp.get("tasks", [])
+
+    # sections['abc'][lot] -> [box numbers]
+    # sections['d'][lot]   -> [box numbers]
+    from collections import defaultdict
+
+    sections = {
+        "abc": defaultdict(list),
+        "d": defaultdict(list),
+    }
+
+    all_lots = set()
+
+    for task in tasks:
+        barn_name = task.get("barnName") or (task.get("barn") or {}).get("name")
+        group_name = task.get("groupName") or ""
+        lot_no = _parse_lot_number(group_name)
+
+        box_name = (
+            task.get("boxName")
+            or (task.get("boxInfo") or {}).get("name")
+        )
+
+        if not barn_name or lot_no is None or not box_name:
+            continue
+
+        # Normalise box as string, but we’ll sort numerically later
+        box_str = str(box_name).strip()
+        if not box_str:
+            continue
+
+        # Decide which section
+        section_key = None
+        if barn_name.startswith("Barn D"):
+            section_key = "d"
+        elif barn_name.startswith("Barn A") or barn_name.startswith("Barn B") or barn_name.startswith("Barn C"):
+            section_key = "abc"
+
+        if not section_key:
+            # ignore other barns for now
+            continue
+
+        sections[section_key][lot_no].append(box_str)
+        all_lots.add(lot_no)
+
+    all_lots = sorted(all_lots)
+
+    # Sort and dedupe each section's boxes
+    for sec in sections.values():
+        for lot, boxes in sec.items():
+            # numeric sort if possible, fall back to string
+            def sort_key(x):
+                try:
+                    return int(x)
+                except ValueError:
+                    return x
+            unique = sorted(set(boxes), key=sort_key)
+            sec[lot] = unique
+
+    # Build HTML
+    html = [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        "<meta charset='utf-8'>",
+        "<title>Box Order - Te Akau</title>",
+        "<style>",
+        "body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; background: #f5f5f5; }",
+        "h1 { margin-bottom: 0.25rem; }",
+        ".subtitle { color: #555; margin-bottom: 1.25rem; }",
+        ".section { background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }",
+        ".section h2 { margin-top: 0; margin-bottom: 0.75rem; }",
+        "table { border-collapse: collapse; width: 100%; max-width: 500px; }",
+        "th, td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }",
+        "th { text-align: left; font-weight: 600; }",
+        ".lot-label { white-space: nowrap; }",
+        ".boxes label { margin-right: 8px; display: inline-block; }",
+        ".back-link { margin-bottom: 12px; display: inline-block; }",
+        "</style>",
+        "</head>",
+        "<body>",
+        "<a href='/' class='back-link'>&larr; Back to menu</a>",
+        "<h1>Box Order</h1>",
+        "<div class='subtitle'>Tick off boxes as you muck out, so no horse comes back to a dirty box.</div>",
+    ]
+
+    # Helper to render a section
+    def render_section(title, section_key):
+        html.append("<div class='section'>")
+        html.append(f"<h2>{title}</h2>")
+        html.append("<table>")
+        html.append("<tr><th>Lot</th><th>Boxes</th></tr>")
+
+        sec = sections[section_key]
+
+        for lot in all_lots:
+            boxes = sec.get(lot, [])
+            html.append("<tr>")
+            html.append(f"<td class='lot-label'>Lot {lot}</td>")
+            if boxes:
+                html.append("<td class='boxes'>")
+                for b in boxes:
+                    html.append(
+                        f"<label><input type='checkbox'> {b}</label>"
+                    )
+                html.append("</td>")
+            else:
+                html.append("<td class='boxes'>–</td>")
+            html.append("</tr>")
+
+        html.append("</table>")
+        html.append("</div>")
+
+    render_section("Barns A, B, C", "abc")
+    render_section("Barn D", "d")
+
+    html.append("</body></html>")
+
+    return "\n".join(html)
 
