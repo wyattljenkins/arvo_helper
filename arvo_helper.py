@@ -221,6 +221,17 @@ def box_order_to_html(data):
     resp = data.get("responseData", {})
     tasks = resp.get("tasks", [])
 
+        # ---- DEBUG: show first 3 tasks for inspection ----
+    import json
+    sample_tasks = json.dumps(tasks[:3], indent=2)
+
+    debug_html = f"""
+    <div style='white-space:pre-wrap; font-size:12px; background:#f0f0f0; padding:10px; margin:10px 0;'>
+    <b>DEBUG TASK SAMPLE:</b>\n{sample_tasks}
+    </div>
+    """
+
+
     # sections['abc'][lot] -> [box numbers]
     # sections['d'][lot]   -> [box numbers]
     sections = {
@@ -317,6 +328,7 @@ def box_order_to_html(data):
         "<a href='/' class='back-link'>&larr; Back to menu</a>",
         "<h1>Box Order</h1>",
         "<div class='subtitle'>Tick off boxes as you muck out, so no horse comes back to a dirty box.</div>",
+        debug_html,
         f"<div class='debug'>Debug: total tasks={stats['total_tasks']}, "
         f"with lot={stats['with_lot']}, with box={stats['with_box']}, "
         f"ABC entries={stats['abc_entries']}, D entries={stats['d_entries']}</div>",
