@@ -252,12 +252,13 @@ def box_order_to_html(data):
 
     for task in tasks:
         barn_name = task.get("barnName") or (task.get("barn") or {}).get("name")
-        group_name = task.get("groupName") or ""
-        lot_no = _parse_lot_number(group_name)
-
-        # lot parsing
-        if lot_no is None:
+        group_name = (task.get("groupName") or "").strip()
+        if not group_name:
+            # if there's truly no group, skip for box order
             continue
+
+        # We treat groupName as the "lot" label/key
+        lot_key = group_name
         stats["with_lot"] += 1
 
         box_name = task.get("boxName") or (task.get("boxInfo") or {}).get("name")
@@ -273,7 +274,11 @@ def box_order_to_html(data):
         if barn_name:
             if barn_name.startswith("Barn D"):
                 section_key = "d"
-            elif barn_name.startswith("Barn A") or barn_name.startswith("Barn B") or barn_name.startswith("Barn C"):
+            elif (
+                barn_name.startswith("Barn A")
+                or barn_name.startswith("Barn B")
+                or barn_name.startswith("Barn C")
+            ):
                 section_key = "abc"
 
         if section_key == "abc":
@@ -282,11 +287,11 @@ def box_order_to_html(data):
             stats["d_entries"] += 1
 
         if not section_key:
-            # ignore other barns for now
             continue
 
-        sections[section_key][lot_no].append(box_str)
-        all_lots.add(lot_no)
+        sections[section_key][lot_key].append(box_str)
+        all_lots.add(lot_key)
+
 
     all_lots = sorted(all_lots)
 
@@ -343,10 +348,10 @@ def box_order_to_html(data):
 
         sec = sections[section_key]
 
-        for lot in all_lots:
-            boxes = sec.get(lot, [])
+        for lot_key in sorted(all_lots):
+            boxes = sec.get(lot_key, [])
             html.append("<tr>")
-            html.append(f"<td class='lot-label'>Lot {lot}</td>")
+            html.append(f"<td class='lot-label'>{lot_key}</td>")
             if boxes:
                 html.append("<td class='boxes'>")
                 for b in boxes:
